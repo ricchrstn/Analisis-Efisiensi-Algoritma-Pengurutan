@@ -22,10 +22,3 @@ CREATE TABLE IF NOT EXISTS hasil_running (
   INDEX idx_ukuran (ukuran_data),
   INDEX idx_created (created_at)
 );
-
--- Jalankan script ini di phpMyAdmin atau MySQL CLI:
--- mysql -u root < create_tables.sql
--- atau di phpMyAdmin:
--- 1. Klik tab "SQL"
--- 2. Paste konten file ini
--- 3. Klik "Execute"
