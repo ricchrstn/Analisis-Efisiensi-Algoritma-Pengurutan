@@ -258,6 +258,9 @@ $row_count = count($labels);
 
                     <div class="form-group">
                         <button type="submit">▶️ Jalankan Pengujian</button>
+                        <a href="hasil.php" style="padding: 10px 20px; background: #17a2b8; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: all 0.3s; display: inline-block;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(23,162,184,0.4)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">📊 Lihat Hasil</a>
+                        <a href="grafik.php" style="padding: 10px 20px; background: #17a2b8; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: all 0.3s; display: inline-block;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(23,162,184,0.4)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">📈 Lihat Grafik</a>
+                        <a href="export.php" style="padding: 10px 20px; background: #28a745; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: all 0.3s; display: inline-block;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(40,167,69,0.4)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">📥 Export CSV</a>
                         <a href="delete_history.php" style="padding: 10px 20px; background: #dc3545; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; transition: all 0.3s; display: inline-block;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 5px 15px rgba(220,53,69,0.4)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">🗑️ Hapus Riwayat</a>
                     </div>
                 </form>

@@ -1,85 +1,143 @@
 <?php
-// run.php - fetch dataset, run sorting algorithms, record times
+/**
+ * run.php - Fetch dataset, run sorting algorithms, record times
+ * 
+ * This script handles the execution of sorting algorithms and records their performance.
+ * Includes input validation, SQL injection protection, and stack overflow protection.
+ */
+
 require_once __DIR__ . '/koneksi.php';
 require_once __DIR__ . '/sorting.php';
+require_once __DIR__ . '/error_handler.php';
 
 set_time_limit(0);
 
+// Validate request method
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: index.php');
     exit;
 }
 
+// Input validation - Size
 $size = isset($_POST['size']) ? (int)$_POST['size'] : 100;
-$algorithm = isset($_POST['algorithm']) ? $_POST['algorithm'] : 'both';
+$size = max(1, min(10000, $size)); // Batasi antara 1-10000
 
-if ($size <= 0) $size = 1;
+// Input validation - Algorithm
+$allowed_algorithms = ['selection', 'insertion', 'both'];
+$algorithm = isset($_POST['algorithm']) && in_array($_POST['algorithm'], $allowed_algorithms) 
+    ? $_POST['algorithm'] 
+    : 'both';
 
-// Fetch random sample of $size
-$sizeSafe = intval($size);
-$res = $conn->query("SELECT id, nilai FROM dataset_nilai ORDER BY RAND() LIMIT $sizeSafe");
+$sizeSafe = $size;
+$error_message = null;
 
-if (!$res) {
-    die('Error querying dataset_nilai: ' . $conn->error);
+// Fetch random sample using prepared statement (SQL injection protection)
+try {
+    // Check available data first
+    $checkStmt = $conn->prepare('SELECT COUNT(*) as total FROM dataset_nilai');
+    $checkStmt->execute();
+    $checkResult = $checkStmt->get_result();
+    $totalAvailable = $checkResult->fetch_assoc()['total'];
+    
+    if ($totalAvailable < $sizeSafe) {
+        $error_message = "Data tidak cukup di database. Tersedia: $totalAvailable, Diperlukan: $sizeSafe. Silakan jalankan insert_dataset.php terlebih dahulu.";
+    } else {
+        // Use prepared statement for LIMIT to prevent SQL injection
+        $stmt = $conn->prepare('SELECT id, nilai FROM dataset_nilai ORDER BY RAND() LIMIT ?');
+        $stmt->bind_param('i', $sizeSafe);
+        
+        if (!$stmt->execute()) {
+            throw new Exception('Error querying dataset_nilai: ' . $stmt->error);
+        }
+        
+        $res = $stmt->get_result();
+        
+        $data = [];
+        $mahasiswa = [];
+        while ($row = $res->fetch_assoc()) {
+            $data[] = (int)$row['nilai'];
+            $mahasiswa[] = ['id' => $row['id'], 'nilai' => $row['nilai']];
+        }
+        
+        if (count($data) < $sizeSafe) {
+            $error_message = "Data tidak cukup. Ditemukan: " . count($data) . ", Diperlukan: $sizeSafe.";
+        }
+    }
+} catch (Exception $e) {
+    show_error('Database Error', $e->getMessage());
+    exit;
 }
 
-$data = [];
-$mahasiswa = [];
-while ($row = $res->fetch_assoc()) {
-    $data[] = (int)$row['nilai'];
-    $mahasiswa[] = ['id' => $row['id'], 'nilai' => $row['nilai']];
-}
-
-if (count($data) < $sizeSafe) {
-    die('Not enough data in dataset_nilai. Run insert_dataset.php first. Found: ' . count($data) . ', Expected: ' . $sizeSafe);
+// If error, show error page
+if ($error_message) {
+    show_error('Data Tidak Cukup', $error_message);
+    exit;
 }
 
 $results = [];
+$time_selection = 0;
+$time_insertion = 0;
+
+// Stack overflow protection for recursive insertion sort
+$MAX_RECURSIVE_SIZE = 3000;
+if (($algorithm === 'insertion' || $algorithm === 'both') && $sizeSafe > $MAX_RECURSIVE_SIZE) {
+    show_error(
+        'Ukuran Dataset Terlalu Besar', 
+        "Insertion Sort (Rekursif) tidak disarankan untuk dataset > $MAX_RECURSIVE_SIZE karena risiko stack overflow. Ukuran saat ini: $sizeSafe. Silakan gunakan dataset lebih kecil atau pilih Selection Sort saja."
+    );
+    exit;
+}
 
 // Run Selection Sort (iterative) jika dipilih
 if ($algorithm === 'selection' || $algorithm === 'both') {
-    $arr1 = $data;
-    $t0 = microtime(true);
-    $sorted1 = selection_sort($arr1);
-    $t1 = microtime(true);
-    $time_selection = $t1 - $t0;
-    
-    // Save to DB
-    $stmt = $conn->prepare('INSERT INTO hasil_running (ukuran_data, waktu_selection, waktu_insertion, created_at) VALUES (?, ?, ?, ?)');
-    $now = date('Y-m-d H:i:s');
-    $zero = 0;
-    $stmt->bind_param('idds', $sizeSafe, $time_selection, $zero, $now);
-    if (!$stmt->execute()) {
-        die('Error saving result: ' . $stmt->error);
+    try {
+        $arr1 = $data;
+        $t0 = microtime(true);
+        $sorted1 = selection_sort($arr1);
+        $t1 = microtime(true);
+        $time_selection = $t1 - $t0;
+        
+        $results['selection'] = [
+            'time' => $time_selection,
+            'sorted' => $sorted1
+        ];
+    } catch (Exception $e) {
+        show_error('Selection Sort Error', 'Terjadi kesalahan saat menjalankan Selection Sort: ' . $e->getMessage());
+        exit;
     }
-    
-    $results['selection'] = [
-        'time' => $time_selection,
-        'sorted' => $sorted1
-    ];
 }
 
 // Run Insertion Sort (recursive) jika dipilih
 if ($algorithm === 'insertion' || $algorithm === 'both') {
-    $arr2 = $data;
-    $t2 = microtime(true);
-    $sorted2 = insertion_sort_recursive($arr2);
-    $t3 = microtime(true);
-    $time_insertion = $t3 - $t2;
-    
-    // Save to DB
-    $stmt = $conn->prepare('INSERT INTO hasil_running (ukuran_data, waktu_selection, waktu_insertion, created_at) VALUES (?, ?, ?, ?)');
-    $now = date('Y-m-d H:i:s');
-    $zero = 0;
-    $stmt->bind_param('idds', $sizeSafe, $zero, $time_insertion, $now);
-    if (!$stmt->execute()) {
-        die('Error saving result: ' . $stmt->error);
+    try {
+        $arr2 = $data;
+        $t2 = microtime(true);
+        $sorted2 = insertion_sort_recursive($arr2);
+        $t3 = microtime(true);
+        $time_insertion = $t3 - $t2;
+        
+        $results['insertion'] = [
+            'time' => $time_insertion,
+            'sorted' => $sorted2
+        ];
+    } catch (Exception $e) {
+        show_error('Insertion Sort Error', 'Terjadi kesalahan saat menjalankan Insertion Sort: ' . $e->getMessage());
+        exit;
     }
+}
+
+// Save to DB - Fix: Save once when "both", not twice
+try {
+    $now = date('Y-m-d H:i:s');
+    $stmt = $conn->prepare('INSERT INTO hasil_running (ukuran_data, waktu_selection, waktu_insertion, created_at) VALUES (?, ?, ?, ?)');
+    $stmt->bind_param('idds', $sizeSafe, $time_selection, $time_insertion, $now);
     
-    $results['insertion'] = [
-        'time' => $time_insertion,
-        'sorted' => $sorted2
-    ];
+    if (!$stmt->execute()) {
+        throw new Exception('Error saving result: ' . $stmt->error);
+    }
+} catch (Exception $e) {
+    // Log error but don't stop execution
+    error_log('Failed to save result to database: ' . $e->getMessage());
 }
 
 ?>
